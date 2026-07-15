@@ -4,3 +4,4 @@ __pycache__/
 .agents/
 .claude/
 .codex/
+fusion_result.json

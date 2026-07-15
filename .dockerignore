@@ -5,3 +5,4 @@
 .codex
 __pycache__/
 *.py[cod]
+fusion_result.json
