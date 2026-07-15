@@ -1,32 +1,63 @@
 {
-  "openapi": "3.0.3",
+  "openapi": "3.1.0",
   "info": {
     "title": "PP-OCR Service",
-    "description": "基于 PaddleX 3.7 的 OCR 推理服务，支持 PP-OCRv5/v6，OM(NPU) / CPU 双后端",
+    "description": "Layout-first OCR service with OM (Ascend NPU) and ONNX Runtime backends.",
     "version": "1.0.0"
   },
-  "servers": [
-    { "url": "http://localhost:8080", "description": "本地开发" }
-  ],
   "paths": {
     "/health": {
       "get": {
-        "summary": "健康检查",
-        "operationId": "health",
+        "summary": "Health",
+        "description": "返回所有 pipeline 状态，om 管线 ready 即表示 NPU 可用",
+        "operationId": "health_health_get",
         "responses": {
           "200": {
-            "description": "OK",
+            "description": "Successful Response",
             "content": {
               "application/json": {
-                "example": {
-                  "status": "ok",
-                  "pipelines": {
-                    "v5:om": "ready",
-                    "v5:cpu": "ready",
-                    "v6:om": "ready",
-                    "v6:cpu": "ready"
-                  },
-                  "npu_available": true
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ppocr/files": {
+      "post": {
+        "tags": [
+          "ocr"
+        ],
+        "summary": "Ocr Predict Files",
+        "description": "上传图片文件进行 OCR 识别（含版面分析）",
+        "operationId": "ocr_predict_files_api_ppocr_files_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_ocr_predict_files_api_ppocr_files_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OCRResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -34,44 +65,41 @@
         }
       }
     },
-    "/api/ppocr": {
+    "/api/ppocr/url": {
       "post": {
-        "summary": "OCR 识别",
-        "operationId": "ocr_predict",
+        "tags": [
+          "ocr"
+        ],
+        "summary": "Ocr Predict Url",
+        "description": "通过图片 URL 进行 OCR 识别（含版面分析）",
+        "operationId": "ocr_predict_url_api_ppocr_url_post",
         "requestBody": {
-          "required": true,
           "content": {
-            "multipart/form-data": {
-              "schema": { "$ref": "#/components/schemas/OCRFormData" }
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OCRUrlRequest"
+              }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "200": {
-            "description": "识别成功",
+            "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/OCRResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/OCRResponse"
+                }
               }
             }
           },
-          "400": {
-            "description": "图片解码失败",
+          "422": {
+            "description": "Validation Error",
             "content": {
               "application/json": {
-                "example": { "detail": "Invalid image file" }
-              }
-            }
-          },
-          "503": {
-            "description": "请求的 pipeline 未就绪",
-            "content": {
-              "application/json": {
-                "example": {
-                  "detail": {
-                    "error": "PIPELINE_NOT_READY",
-                    "available": ["v5:cpu", "v6:om", "v6:cpu"]
-                  }
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -82,65 +110,268 @@
   },
   "components": {
     "schemas": {
-      "OCRFormData": {
-        "type": "object",
-        "required": ["files", "version", "backend"],
+      "Body_ocr_predict_files_api_ppocr_files_post": {
         "properties": {
           "files": {
+            "items": {
+              "type": "string",
+              "contentMediaType": "application/octet-stream"
+            },
             "type": "array",
-            "items": { "type": "string", "format": "binary" },
-            "description": "上传的图片文件（支持多张）",
-            "minItems": 1,
-            "maxItems": 20
+            "title": "Files",
+            "description": "图片文件"
           },
           "version": {
             "type": "string",
-            "enum": ["v5", "v6"],
-            "description": "模型产线版本"
+            "pattern": "^(v5|v6)$",
+            "title": "Version",
+            "description": "v5 | v6"
           },
           "backend": {
             "type": "string",
-            "enum": ["om", "cpu"],
-            "description": "推理后端，om=NPU, cpu=ONNX Runtime"
+            "pattern": "^(om|cpu)$",
+            "title": "Backend",
+            "description": "om | cpu"
           }
-        }
-      },
-      "OCRItem": {
+        },
         "type": "object",
+        "required": [
+          "files",
+          "version",
+          "backend"
+        ],
+        "title": "Body_ocr_predict_files_api_ppocr_files_post"
+      },
+      "HTTPValidationError": {
         "properties": {
-          "texts": {
-            "type": "array",
-            "items": { "type": "string" },
-            "description": "识别出的文本行"
-          },
-          "scores": {
-            "type": "array",
-            "items": { "type": "number" },
-            "description": "每行置信度"
-          },
-          "boxes": {
-            "type": "array",
+          "detail": {
             "items": {
-              "type": "array",
-              "items": { "type": "integer" },
-              "minItems": 4,
-              "maxItems": 4
+              "$ref": "#/components/schemas/ValidationError"
             },
-            "description": "文本框坐标 [[x1,y1,x2,y2], ...]"
+            "type": "array",
+            "title": "Detail"
           }
-        }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "OCRBlock": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label",
+            "description": "版面标签: doc_title, text, table, image, ..."
+          },
+          "label_name": {
+            "type": "string",
+            "title": "Label Name",
+            "description": "版面标签中文名: 文档标题、正文、表格、图片等"
+          },
+          "bbox": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Bbox",
+            "description": "版面区域坐标 [x1,y1,x2,y2]"
+          },
+          "content": {
+            "type": "string",
+            "title": "Content",
+            "description": "区域内所有文字，以 \\n 分行",
+            "default": ""
+          },
+          "confidence": {
+            "type": "number",
+            "title": "Confidence",
+            "description": "版面检测置信度"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/OCRLine"
+            },
+            "type": "array",
+            "title": "Lines",
+            "description": "区域内每行 OCR 文字"
+          }
+        },
+        "type": "object",
+        "required": [
+          "label",
+          "label_name",
+          "bbox",
+          "confidence"
+        ],
+        "title": "OCRBlock",
+        "description": "一个版面区域内的 OCR 结果"
+      },
+      "OCRFileResult": {
+        "properties": {
+          "blocks": {
+            "items": {
+              "$ref": "#/components/schemas/OCRBlock"
+            },
+            "type": "array",
+            "title": "Blocks",
+            "description": "按版面区域分组的识别结果"
+          },
+          "version": {
+            "type": "string",
+            "title": "Version",
+            "description": "OCR 产线版本"
+          },
+          "backend": {
+            "type": "string",
+            "title": "Backend",
+            "description": "推理后端"
+          },
+          "elapsed": {
+            "type": "number",
+            "title": "Elapsed",
+            "description": "处理耗时（秒）"
+          },
+          "file_url": {
+            "type": "string",
+            "title": "File Url",
+            "description": "文件 URL（/url 接口）或空（/files 接口）",
+            "default": ""
+          },
+          "file_type": {
+            "type": "string",
+            "title": "File Type",
+            "description": "图片 MIME 类型",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "version",
+          "backend",
+          "elapsed"
+        ],
+        "title": "OCRFileResult",
+        "description": "单张图片的 OCR 结果"
+      },
+      "OCRLine": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "title": "Text",
+            "description": "识别文字"
+          },
+          "score": {
+            "type": "number",
+            "title": "Score",
+            "description": "识别置信度"
+          },
+          "bbox": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Bbox",
+            "description": "文本框坐标 [x1,y1,x2,y2]"
+          }
+        },
+        "type": "object",
+        "required": [
+          "text",
+          "score",
+          "bbox"
+        ],
+        "title": "OCRLine",
+        "description": "单行 OCR 文字"
       },
       "OCRResponse": {
-        "type": "object",
         "properties": {
           "results": {
+            "items": {
+              "$ref": "#/components/schemas/OCRFileResult"
+            },
             "type": "array",
-            "items": { "$ref": "#/components/schemas/OCRItem" }
+            "title": "Results"
+          }
+        },
+        "type": "object",
+        "required": [
+          "results"
+        ],
+        "title": "OCRResponse",
+        "description": "统一 OCR 响应"
+      },
+      "OCRUrlRequest": {
+        "properties": {
+          "images": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "minItems": 1,
+            "title": "Images",
+            "description": "图片 URL 列表（1-20 张）"
           },
-          "version": { "type": "string" },
-          "backend": { "type": "string" },
-          "elapsed": { "type": "number", "description": "推理耗时（秒）" }
-        }
+          "version": {
+            "type": "string",
+            "pattern": "^(v5|v6)$",
+            "title": "Version",
+            "description": "OCR 产线版本: v5 | v6"
+          },
+          "backend": {
+            "type": "string",
+            "pattern": "^(om|cpu)$",
+            "title": "Backend",
+            "description": "推理后端: om(NPU) | cpu"
+          }
+        },
+        "type": "object",
+        "required": [
+          "images",
+          "version",
+          "backend"
+        ],
+        "title": "OCRUrlRequest",
+        "description": "通过 URL 提交图片的 OCR 请求"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
       }
     }
   }

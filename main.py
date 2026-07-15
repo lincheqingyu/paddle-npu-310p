@@ -26,7 +26,12 @@ async def lifespan(app: FastAPI):
     # ── 关闭：无需清理 ──
 
 
-app = FastAPI(title="PP-OCR Service", lifespan=lifespan)
+app = FastAPI(
+    title="PP-OCR Service",
+    description="Layout-first OCR service with OM (Ascend NPU) and ONNX Runtime backends.",
+    version="1.0.0",
+    lifespan=lifespan,
+)
 
 
 @app.get("/health")

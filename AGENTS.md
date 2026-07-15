@@ -15,7 +15,7 @@
 Keep this section current after material work is completed.
 
 - The FastAPI OCR service exposes `/health` and OCR endpoints from `main.py`.
-- The Dockerfile packages the service into `/app` and inherits OCR models and the Ascend runtime from the `dev-2` base image.
+- The Dockerfile packages the service into `/app`, inherits OCR models and the Ascend runtime from the `dev-2` base image, and loads the Ascend environment before starting the service.
 - `fusion_result.json` has been removed from version control and is ignored by Git and Docker builds.
 - Image builds and registry publishing must be run from the Docker host; this repository does not assume Docker is available inside the application container.
 

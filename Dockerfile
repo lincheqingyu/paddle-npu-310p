@@ -19,5 +19,5 @@ ENV PYTHONUNBUFFERED=1
 
 EXPOSE 8080
 
-# FastAPI loads its OCR pipelines during startup before accepting requests.
-CMD ["python3", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
+# Load the Ascend runtime paths required by the OM backend before starting.
+CMD ["/bin/bash", "-c", "source /etc/profile.d/ascend_env.sh && exec python main.py"]
