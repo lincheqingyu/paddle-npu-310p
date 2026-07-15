@@ -1,0 +1,7 @@
+.git
+.env
+.agents
+.claude
+.codex
+__pycache__/
+*.py[cod]

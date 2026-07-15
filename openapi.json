@@ -1,0 +1,147 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "PP-OCR Service",
+    "description": "基于 PaddleX 3.7 的 OCR 推理服务，支持 PP-OCRv5/v6，OM(NPU) / CPU 双后端",
+    "version": "1.0.0"
+  },
+  "servers": [
+    { "url": "http://localhost:8080", "description": "本地开发" }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "健康检查",
+        "operationId": "health",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": "ok",
+                  "pipelines": {
+                    "v5:om": "ready",
+                    "v5:cpu": "ready",
+                    "v6:om": "ready",
+                    "v6:cpu": "ready"
+                  },
+                  "npu_available": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ppocr": {
+      "post": {
+        "summary": "OCR 识别",
+        "operationId": "ocr_predict",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": { "$ref": "#/components/schemas/OCRFormData" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "识别成功",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/OCRResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "图片解码失败",
+            "content": {
+              "application/json": {
+                "example": { "detail": "Invalid image file" }
+              }
+            }
+          },
+          "503": {
+            "description": "请求的 pipeline 未就绪",
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": {
+                    "error": "PIPELINE_NOT_READY",
+                    "available": ["v5:cpu", "v6:om", "v6:cpu"]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "OCRFormData": {
+        "type": "object",
+        "required": ["files", "version", "backend"],
+        "properties": {
+          "files": {
+            "type": "array",
+            "items": { "type": "string", "format": "binary" },
+            "description": "上传的图片文件（支持多张）",
+            "minItems": 1,
+            "maxItems": 20
+          },
+          "version": {
+            "type": "string",
+            "enum": ["v5", "v6"],
+            "description": "模型产线版本"
+          },
+          "backend": {
+            "type": "string",
+            "enum": ["om", "cpu"],
+            "description": "推理后端，om=NPU, cpu=ONNX Runtime"
+          }
+        }
+      },
+      "OCRItem": {
+        "type": "object",
+        "properties": {
+          "texts": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "识别出的文本行"
+          },
+          "scores": {
+            "type": "array",
+            "items": { "type": "number" },
+            "description": "每行置信度"
+          },
+          "boxes": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": { "type": "integer" },
+              "minItems": 4,
+              "maxItems": 4
+            },
+            "description": "文本框坐标 [[x1,y1,x2,y2], ...]"
+          }
+        }
+      },
+      "OCRResponse": {
+        "type": "object",
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/OCRItem" }
+          },
+          "version": { "type": "string" },
+          "backend": { "type": "string" },
+          "elapsed": { "type": "number", "description": "推理耗时（秒）" }
+        }
+      }
+    }
+  }
+}
